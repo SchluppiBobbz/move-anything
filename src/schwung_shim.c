@@ -827,6 +827,15 @@ static void shadow_inprocess_process_midi(void) {
             /* Sampler sees clock from cable 0 only (Move internal) to avoid double-counting */
             if (cable == 0) {
                 sampler_on_clock(status_usb);
+                /* Also forward internal clock to overtake DSP (tools need
+                 * Move's transport clock for sync features like bar-quantize) */
+                if (overtake_dsp_gen && overtake_dsp_gen_inst && overtake_dsp_gen->on_midi) {
+                    uint8_t msg[3] = { status_usb, 0, 0 };
+                    overtake_dsp_gen->on_midi(overtake_dsp_gen_inst, msg, 1, MOVE_MIDI_SOURCE_HOST);
+                } else if (overtake_dsp_fx && overtake_dsp_fx_inst && overtake_dsp_fx->on_midi) {
+                    uint8_t msg[3] = { status_usb, 0, 0 };
+                    overtake_dsp_fx->on_midi(overtake_dsp_fx_inst, msg, 1, MOVE_MIDI_SOURCE_HOST);
+                }
             }
 
             /* Only broadcast cable 2 (external USB) clock to slots.
@@ -843,6 +852,14 @@ static void shadow_inprocess_process_midi(void) {
                                                   MOVE_MIDI_SOURCE_EXTERNAL);
                     }
                 }
+            }
+            /* Also forward external clock to overtake DSP */
+            if (overtake_dsp_gen && overtake_dsp_gen_inst && overtake_dsp_gen->on_midi) {
+                uint8_t msg[3] = { status_usb, 0, 0 };
+                overtake_dsp_gen->on_midi(overtake_dsp_gen_inst, msg, 1, MOVE_MIDI_SOURCE_EXTERNAL);
+            } else if (overtake_dsp_fx && overtake_dsp_fx_inst && overtake_dsp_fx->on_midi) {
+                uint8_t msg[3] = { status_usb, 0, 0 };
+                overtake_dsp_fx->on_midi(overtake_dsp_fx_inst, msg, 1, MOVE_MIDI_SOURCE_EXTERNAL);
             }
             continue;  /* Done with this packet */
         }
@@ -2566,10 +2583,22 @@ static int shim_handle_param_special(uint8_t req_type, uint32_t req_id) {
                 shadow_param->error = 0;
                 shadow_param->result_len = 0;
             } else if (overtake_dsp_gen && overtake_dsp_gen_inst && overtake_dsp_gen->set_param) {
+                /* Intercept project_bpm: update global sampler_set_tempo so the
+                 * BPM change propagates to all modules (overlay, clock, etc.) */
+                if (strcmp(param_key, "project_bpm") == 0 && shadow_param->value[0]) {
+                    float bpm = (float)atof(shadow_param->value);
+                    if (bpm >= 20.0f && bpm <= 999.0f)
+                        sampler_set_tempo = bpm;
+                }
                 overtake_dsp_gen->set_param(overtake_dsp_gen_inst, param_key, shadow_param->value);
                 shadow_param->error = 0;
                 shadow_param->result_len = 0;
             } else if (overtake_dsp_fx && overtake_dsp_fx_inst && overtake_dsp_fx->set_param) {
+                if (strcmp(param_key, "project_bpm") == 0 && shadow_param->value[0]) {
+                    float bpm = (float)atof(shadow_param->value);
+                    if (bpm >= 20.0f && bpm <= 999.0f)
+                        sampler_set_tempo = bpm;
+                }
                 overtake_dsp_fx->set_param(overtake_dsp_fx_inst, param_key, shadow_param->value);
                 shadow_param->error = 0;
                 shadow_param->result_len = 0;
