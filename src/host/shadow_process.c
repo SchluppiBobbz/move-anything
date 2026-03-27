@@ -350,12 +350,14 @@ static void *link_sub_monitor_main(void *arg) {
     while (link_sub_monitor_running) {
         uint64_t now_ms = link_sub_now_ms();
 
-        if (!host.link_audio->enabled || !link_audio_routing_enabled) {
-            /* When routing is disabled, kill the subscriber so we stop
-             * the fork()-heavy restart cycle that causes audio clicks. */
+        if (!host.link_audio->enabled) {
+            /* When link_audio feature is disabled entirely, kill the subscriber.
+             * Note: link_audio_routing_enabled is NOT checked here — the subscriber
+             * is needed for tempo sync (Shift+E6 → Link BPM) even when audio
+             * routing is off. */
             if (link_sub_started && link_sub_pid > 0) {
                 unified_log("shim", LOG_LEVEL_INFO,
-                            "Link Audio routing disabled — killing subscriber pid=%d (la_en=%d rt_en=%d)",
+                            "Link Audio disabled — killing subscriber pid=%d (la_en=%d rt_en=%d)",
                             (int)link_sub_pid,
                             host.link_audio->enabled,
                             link_audio_routing_enabled);
@@ -376,7 +378,7 @@ static void *link_sub_monitor_main(void *arg) {
             continue;
         }
 
-        /* If subscriber not running but routing just got re-enabled, launch it */
+        /* If subscriber not running, launch it (needed for tempo sync via Link) */
         if (!link_sub_started || link_sub_pid <= 0) {
             unified_log("shim", LOG_LEVEL_DEBUG,
                         "Link sub check: started=%d pid=%d, calling reap",
@@ -384,7 +386,7 @@ static void *link_sub_monitor_main(void *arg) {
             link_sub_reap();
             if (!link_sub_started || link_sub_pid <= 0) {
                 unified_log("shim", LOG_LEVEL_INFO,
-                            "Link Audio routing enabled — launching subscriber (started=%d pid=%d)",
+                            "Link Audio enabled — launching subscriber (started=%d pid=%d)",
                             link_sub_started, (int)link_sub_pid);
                 launch_link_subscriber();
                 cooldown_until_ms = link_sub_now_ms() + LINK_SUB_COOLDOWN_MS;

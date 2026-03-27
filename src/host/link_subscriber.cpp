@@ -197,6 +197,8 @@ int main()
     uint64_t last_rx_count = 0;
     uint64_t last_tx_count = 0;
     int tick = 0;
+    double last_file_tempo = initial_tempo;
+    int tempo_poll_tick = 0;
 
     while (g_running) {
         /* Use a shorter sleep to poll the publisher shm more frequently.
@@ -354,6 +356,26 @@ int main()
                 }
 
                 slots[i].last_read_pos = rp;
+            }
+        }
+
+        /* Poll /tmp/link-tempo for runtime BPM changes (every ~500ms).
+         * When changed, propagate the new tempo to all Link peers via
+         * commitAppSessionState — this includes the Move hardware metronome. */
+        if (++tempo_poll_tick >= 50) {
+            tempo_poll_tick = 0;
+            FILE *tfp = fopen("/tmp/link-tempo", "r");
+            if (tfp) {
+                double t = 0.0;
+                if (fscanf(tfp, "%lf", &t) == 1 && t >= 20.0 && t <= 999.0
+                        && fabs(t - last_file_tempo) > 0.05) {
+                    last_file_tempo = t;
+                    auto state = link.captureAppSessionState();
+                    state.setTempo(t, link.clock().micros());
+                    link.commitAppSessionState(state);
+                    LOG_INFO(LINK_SUB_LOG_SOURCE, "tempo changed to %.1f BPM via Link", t);
+                }
+                fclose(tfp);
             }
         }
 

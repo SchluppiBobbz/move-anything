@@ -2587,8 +2587,13 @@ static int shim_handle_param_special(uint8_t req_type, uint32_t req_id) {
                  * BPM change propagates to all modules (overlay, clock, etc.) */
                 if (strcmp(param_key, "project_bpm") == 0 && shadow_param->value[0]) {
                     float bpm = (float)atof(shadow_param->value);
-                    if (bpm >= 20.0f && bpm <= 999.0f)
+                    if (bpm >= 20.0f && bpm <= 999.0f) {
                         sampler_set_tempo = bpm;
+                        /* Write to /tmp/link-tempo so link_subscriber propagates the
+                         * tempo change to all Link peers (incl. Move hardware metronome) */
+                        FILE *_fp = fopen("/tmp/link-tempo", "w");
+                        if (_fp) { fprintf(_fp, "%.1f\n", bpm); fclose(_fp); }
+                    }
                 }
                 overtake_dsp_gen->set_param(overtake_dsp_gen_inst, param_key, shadow_param->value);
                 shadow_param->error = 0;
@@ -2596,8 +2601,11 @@ static int shim_handle_param_special(uint8_t req_type, uint32_t req_id) {
             } else if (overtake_dsp_fx && overtake_dsp_fx_inst && overtake_dsp_fx->set_param) {
                 if (strcmp(param_key, "project_bpm") == 0 && shadow_param->value[0]) {
                     float bpm = (float)atof(shadow_param->value);
-                    if (bpm >= 20.0f && bpm <= 999.0f)
+                    if (bpm >= 20.0f && bpm <= 999.0f) {
                         sampler_set_tempo = bpm;
+                        FILE *_fp = fopen("/tmp/link-tempo", "w");
+                        if (_fp) { fprintf(_fp, "%.1f\n", bpm); fclose(_fp); }
+                    }
                 }
                 overtake_dsp_fx->set_param(overtake_dsp_fx_inst, param_key, shadow_param->value);
                 shadow_param->error = 0;
