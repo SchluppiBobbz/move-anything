@@ -1197,6 +1197,16 @@ static void shadow_overtake_dsp_load(const char *path) {
                 char msg[256];
                 snprintf(msg, sizeof(msg), "Overtake DSP: loaded generator from %s", path);
                 shadow_log(msg);
+                /* Push current project BPM
+                 * sampler_get_bpm() returns Set tempo, MIDI clock, or settings BPM. */
+                {
+                    float init_bpm = sampler_get_bpm(NULL);
+                    if (init_bpm >= 20.0f && init_bpm <= 999.0f) {
+                        char bpm_str[32];
+                        snprintf(bpm_str, sizeof(bpm_str), "%.1f", init_bpm);
+                        overtake_dsp_gen->set_param(overtake_dsp_gen_inst, "project_bpm", bpm_str);
+                    }
+                }
                 return;
             }
         }
@@ -1214,6 +1224,15 @@ static void shadow_overtake_dsp_load(const char *path) {
                 char msg[256];
                 snprintf(msg, sizeof(msg), "Overtake DSP: loaded FX from %s", path);
                 shadow_log(msg);
+                /* Push current project BPM so the plugin doesn't start at 120 default. */
+                {
+                    float init_bpm = sampler_get_bpm(NULL);
+                    if (init_bpm >= 20.0f && init_bpm <= 999.0f) {
+                        char bpm_str[32];
+                        snprintf(bpm_str, sizeof(bpm_str), "%.1f", init_bpm);
+                        overtake_dsp_fx->set_param(overtake_dsp_fx_inst, "project_bpm", bpm_str);
+                    }
+                }
                 return;
             }
         }
